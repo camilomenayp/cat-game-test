@@ -27,11 +27,10 @@ type SpritePosition struct {
 }
 
 type Movement struct {
-	action_name          string
-	type_name            string
-	total_sprites        int32
-	sprite_sheet         *SpriteSheet
-	actual_sprite_number int32
+	action_name   string
+	type_name     string
+	total_sprites int32
+	sprite_sheet  *SpriteSheet
 }
 
 func (mov *Movement) SetSpritesFrames() error {
@@ -49,23 +48,29 @@ func (mov *Movement) Init(action_name string, type_name string, total_sprites in
 	mov.total_sprites = total_sprites
 	mov.action_name = action_name
 	mov.type_name = type_name
-	mov.actual_sprite_number = -1
 
+}
+
+func (mov *Movement) GetTotalSprites() int32 {
+	return mov.total_sprites
 }
 
 func (mov *Movement) GetSpriteSheet() *pixel.Picture {
 	return mov.sprite_sheet.sprite_sheet
 }
 
-func (mov *Movement) GetMovementSpriteFrame() *pixel.Sprite {
-	n := mov.actual_sprite_number
-	if n == -1 || n+1 > mov.total_sprites-1 {
-		n = 0
-	} else {
-		n++
-	}
-	sprite := pixel.NewSprite(*mov.sprite_sheet.sprite_sheet, mov.sprite_sheet.sprites_position[n].sprite_rect)
-	mov.actual_sprite_number = n
+func (mov *Movement) GetMovementSpriteFrame(frame_number int32) *pixel.Sprite {
+	// n := mov.actual_sprite_number
+
+	// if n == -1 || n+1 > mov.total_sprites {
+	// 	n = 0
+	// } else {
+	// 	n++
+	// }
+	// sprite := pixel.NewSprite(*mov.sprite_sheet.sprite_sheet, mov.sprite_sheet.sprites_position[n].sprite_rect)
+	// mov.actual_sprite_number = n
+
+	sprite := pixel.NewSprite(*mov.sprite_sheet.sprite_sheet, mov.sprite_sheet.sprites_position[frame_number].sprite_rect)
 	return sprite
 }
 func getSpriteSheet(folder string, path string, n_sprites int32) (*SpriteSheet, error) {
