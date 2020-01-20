@@ -1,8 +1,15 @@
 package sprite
 
 import (
+	"bufio"
+	"encoding/csv"
+	"fmt"
 	"image"
+	"io"
+	"log"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/faiface/pixel"
 )
@@ -13,84 +20,38 @@ type Size struct {
 }
 
 type SpriteSheet struct {
-	sprite_sheet     *pixel.Picture
-	sprites_position []SpritePosition
+	Sprites_sheet *pixel.Picture
+	Sprites       *map[string][]Sprite
 }
 
-type SpritePosition struct {
-	sprite_number int32
-	pos_x         int32
-	pos_y         int32
-	size_x        int32
-	size_y        int32
-	sprite_rect   pixel.Rect
-}
-
-type Movement struct {
-	action_name   string
-	type_name     string
+type Sprite struct {
+	Sprite_number int32
+	max_x         int32
+	max_y         int32
+	height        int32
+	width         int32
+	Sprite        *pixel.Sprite
+	name          string
 	total_sprites int32
-	sprite_sheet  *SpriteSheet
 }
 
-func (mov *Movement) SetSpritesFrames() error {
+func LoadAllSprites(object_name string, csvPath string, spritePath string) SpriteSheet {
+	sprInfo := loadCsv("images/png/" + object_name + "/" + csvPath)
+	pic, _ := loadPicture("images/png/" + object_name + "/" + spritePath)
+	//width := int32(pic.Bounds().W())
+	height := int32(pic.Bounds().H())
+	for i, v := range sprInfo {
+		for j, w := range v {
+			rect := pixel.R(float64(w.max_x), float64(height-w.max_y-w.height), float64(w.max_x+w.width), float64(height-w.max_y))
+			fmt.Println("[Sprite] Building action: *", i, "(", w.Sprite_number, ")*")
+			fmt.Println("[Sprite] ", rect.String())
+			sprInfo[i][j].Sprite = pixel.NewSprite(pic, rect)
 
-	sprite, err := getSpriteSheet(mov.type_name, mov.action_name+"-sheet.png", mov.total_sprites)
-	if err != nil {
-		return err
+			sprInfo[i][j].total_sprites = int32(len(v))
+		}
+
 	}
-	mov.sprite_sheet = sprite
-
-	return nil
-}
-
-func (mov *Movement) Init(action_name string, type_name string, total_sprites int32) {
-	mov.total_sprites = total_sprites
-	mov.action_name = action_name
-	mov.type_name = type_name
-
-}
-
-func (mov *Movement) GetTotalSprites() int32 {
-	return mov.total_sprites
-}
-
-func (mov *Movement) GetSpriteSheet() *pixel.Picture {
-	return mov.sprite_sheet.sprite_sheet
-}
-
-func (mov *Movement) GetMovementSpriteFrame(frame_number int32) *pixel.Sprite {
-	// n := mov.actual_sprite_number
-
-	// if n == -1 || n+1 > mov.total_sprites {
-	// 	n = 0
-	// } else {
-	// 	n++
-	// }
-	// sprite := pixel.NewSprite(*mov.sprite_sheet.sprite_sheet, mov.sprite_sheet.sprites_position[n].sprite_rect)
-	// mov.actual_sprite_number = n
-
-	sprite := pixel.NewSprite(*mov.sprite_sheet.sprite_sheet, mov.sprite_sheet.sprites_position[frame_number].sprite_rect)
-	return sprite
-}
-func getSpriteSheet(folder string, path string, n_sprites int32) (*SpriteSheet, error) {
-	pic, err := loadPicture("images/png/" + folder + "/" + path)
-	if err != nil {
-		return nil, err
-	}
-
-	height := pic.Bounds().H()
-	width := pic.Bounds().W()
-
-	size_x := int32(width) / n_sprites
-	size_y := int32(height)
-	sprite_pos := make([]SpritePosition, 0)
-	for i := int32(0); i < n_sprites; i++ {
-		sprite_pos = append(sprite_pos, SpritePosition{i + 1, i * size_x, 0 * size_y, size_x, size_y, pixel.R(float64(i*size_x), 0, float64(i*size_x+size_x), float64(size_y))})
-	}
-
-	frame := &SpriteSheet{&pic, sprite_pos}
-	return frame, nil
+	return SpriteSheet{&pic, &sprInfo}
 }
 
 func loadPicture(path string) (pixel.Picture, error) {
@@ -104,4 +65,41 @@ func loadPicture(path string) (pixel.Picture, error) {
 		return nil, err
 	}
 	return pixel.PictureDataFromImage(img), nil
+}
+
+func loadCsv(path string) map[string][]Sprite {
+	csvFile, _ := os.Open(path)
+	reader := csv.NewReader(bufio.NewReader(csvFile))
+	sprites := make(map[string][]Sprite)
+	for {
+		line, error := reader.Read()
+		if error == io.EOF {
+			break
+		} else if error != nil {
+			log.Fatal(error)
+		}
+		ini := strings.IndexRune(line[0], '(')
+		end := strings.IndexRune(line[0], ')')
+
+		number, _ := strconv.ParseInt(line[0][ini+1:end], 10, 32)
+		max_x, _ := strconv.ParseInt(line[1], 10, 32)
+		max_y, _ := strconv.ParseInt(line[2], 10, 32)
+		height, _ := strconv.ParseInt(line[4], 10, 32)
+		width, _ := strconv.ParseInt(line[3], 10, 32)
+
+		spr := Sprite{
+			Sprite_number: int32(number),
+			name:          strings.Split(line[0], " ")[0],
+			max_x:         int32(max_x),
+			max_y:         int32(max_y),
+			height:        int32(height),
+			width:         int32(width),
+		}
+		if val, ok := sprites[strings.Split(line[0], " ")[0]]; ok {
+			sprites[strings.Split(line[0], " ")[0]] = append(val, spr)
+		} else {
+			sprites[strings.Split(line[0], " ")[0]] = append(sprites[strings.Split(line[0], " ")[0]], spr)
+		}
+	}
+	return sprites
 }
