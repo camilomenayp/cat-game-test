@@ -22,11 +22,12 @@ type Physics struct {
 }
 
 type Movement struct {
-	action_name   string
-	type_name     string
-	total_sprites int32
-	sprites       []sprite.Sprite
-	sprites_sheet *pixel.Picture
+	action_name        string
+	type_name          string
+	total_sprites      int32
+	sprites            []sprite.Sprite
+	sprites_sheet      *pixel.Picture
+	can_be_interrupted bool
 }
 
 type Animation struct {
@@ -35,6 +36,7 @@ type Animation struct {
 	counter      float64
 	sprite       *pixel.Sprite
 	actual_frame int32
+	finished     bool
 }
 
 type Entity struct {
@@ -47,21 +49,25 @@ type Entity struct {
 	pos_y       float64
 }
 
-func (ent *Entity) UpdateMovement(mov Movement) {
-	if mov.action_name != ent.animation.movement.action_name {
+func (ent *Entity) UpdateMovement(mov Movement, vector pixel.Vec) {
+
+	if (ent.animation.finished && ent.animation.movement.action_name != "Idle") || (ent.animation.movement.can_be_interrupted && mov.action_name != ent.animation.movement.action_name) {
+		fmt.Println("[Game] [Entity:", ent.entity_name, "]", "Starting action:", mov.action_name)
 		ent.animation.movement = mov
 		ent.animation.counter = 0
 		ent.animation.actual_frame = 0
-		ent.physics.vel.X = 0
-		ent.physics.vel.Y = 0
+		ent.animation.finished = false
+		ent.UpdatePhysics(vector)
 	}
 }
 func (ent *Entity) UpdatePhysics(vector pixel.Vec) {
 
-	x, y := vector.XY()
-	ent.physics.vel.X = x
-	ent.physics.vel.Y = y
-
+	if vector != ent.physics.vel {
+		x, y := vector.XY()
+		ent.physics.vel.X = x
+		ent.physics.vel.Y = y
+		fmt.Println("[Game] [Entity:", ent.entity_name, "]", "Physics vector updated to:(", x, y, ")")
+	}
 }
 
 func (mov Movement) GetFrame(index int32) *pixel.Sprite {
@@ -72,13 +78,36 @@ func (mov Movement) GetFrame(index int32) *pixel.Sprite {
 	}
 	return nil
 }
+
+func (ent *Entity) checkMovementStatus() {
+
+	if ent.animation.actual_frame == ent.animation.movement.total_sprites-1 && ent.animation.movement.action_name != "Jump" {
+		ent.animation.finished = true
+	}
+}
 func (ent *Entity) update(dt float64) {
 	ent.animation.counter += dt
+	x := ent.pos_x
+	y := ent.pos_y
 	if ent.animation.counter >= ent.animation.rate {
+		ent.pos_x = ent.pos_x + ent.physics.vel.X*dt
+		if ent.pos_y+ent.physics.vel.Y*dt >= 300.0 && ent.animation.movement.action_name == "Jump" {
+			ent.pos_y = ent.pos_y + ent.physics.vel.Y*dt
+			ent.physics.vel.Y = ent.physics.vel.Y + ent.physics.gravity*dt
+		} else if ent.animation.movement.action_name == "Jump" {
+			ent.pos_y = 300
+			ent.animation.finished = true
+		}
+
 		ent.animation.actual_frame++
 		ent.animation.sprite = ent.animation.movement.GetFrame(ent.animation.actual_frame % (ent.animation.movement.total_sprites - 1))
 		ent.animation.counter = 0
-		ent.pos_x = ent.pos_x + ent.physics.vel.X*ent.physics.speed
+
+		if x != ent.pos_x || y != ent.pos_y {
+			fmt.Println("[Game] [Entity:", ent.entity_name, "]", "Position updated to:(", ent.pos_x, ent.pos_y, ")")
+			fmt.Println("[Game] [Entity:", ent.entity_name, "]", "Speed vector:(", ent.physics.vel.X, ent.physics.vel.Y, ")")
+
+		}
 	}
 }
 
@@ -86,28 +115,28 @@ func (ent *Entity) draw(t pixel.Target) {
 	if ent.animation.sprite == nil {
 		ent.animation.sprite = ent.animation.movement.GetFrame(0)
 	}
-	ent.animation.sprite.Draw(t, pixel.IM.Scaled(pixel.ZV, 0.2).Chained(pixel.IM.Moved(pixel.V(ent.pos_x, 300))))
+	ent.animation.sprite.Draw(t, pixel.IM.Scaled(pixel.ZV, 0.2).Chained(pixel.IM.Moved(pixel.V(ent.pos_x, ent.pos_y))))
 }
 
 var characterSpriteSheet sprite.SpriteSheet
 
-func createMovement(arrMovs *map[string]Movement, arrSprites *map[string][]sprite.Sprite, action string, pic *pixel.Picture) {
+func createMovement(arrMovs *map[string]Movement, arrSprites *map[string][]sprite.Sprite, action string, pic *pixel.Picture, canBeInterrupted bool) {
 	mov := (*arrSprites)[action]
-	(*arrMovs)[action] = Movement{action_name: action, type_name: "cat", total_sprites: int32(len(mov)), sprites: mov, sprites_sheet: pic}
+	(*arrMovs)[action] = Movement{action_name: action, type_name: "cat", total_sprites: int32(len(mov)), sprites: mov, sprites_sheet: pic, can_be_interrupted: canBeInterrupted}
 }
 
 func initMovements() (map[string]Movement, error) {
 	characterSpriteSheet = sprite.LoadAllSprites("cat", "sprites.txt", "spritesheet.png")
 	arr := *characterSpriteSheet.Sprites
 	arrMovements := make(map[string]Movement, 0)
-	createMovement(&arrMovements, &arr, "Jump", characterSpriteSheet.Sprites_sheet)
-	createMovement(&arrMovements, &arr, "Walk", characterSpriteSheet.Sprites_sheet)
-	createMovement(&arrMovements, &arr, "Fall", characterSpriteSheet.Sprites_sheet)
-	createMovement(&arrMovements, &arr, "Hurt", characterSpriteSheet.Sprites_sheet)
-	createMovement(&arrMovements, &arr, "Idle", characterSpriteSheet.Sprites_sheet)
-	createMovement(&arrMovements, &arr, "Slide", characterSpriteSheet.Sprites_sheet)
-	createMovement(&arrMovements, &arr, "Run", characterSpriteSheet.Sprites_sheet)
-	createMovement(&arrMovements, &arr, "Dead", characterSpriteSheet.Sprites_sheet)
+	createMovement(&arrMovements, &arr, "Jump", characterSpriteSheet.Sprites_sheet, false)
+	createMovement(&arrMovements, &arr, "Walk", characterSpriteSheet.Sprites_sheet, true)
+	createMovement(&arrMovements, &arr, "Fall", characterSpriteSheet.Sprites_sheet, false)
+	createMovement(&arrMovements, &arr, "Hurt", characterSpriteSheet.Sprites_sheet, false)
+	createMovement(&arrMovements, &arr, "Idle", characterSpriteSheet.Sprites_sheet, true)
+	createMovement(&arrMovements, &arr, "Slide", characterSpriteSheet.Sprites_sheet, false)
+	createMovement(&arrMovements, &arr, "Run", characterSpriteSheet.Sprites_sheet, true)
+	createMovement(&arrMovements, &arr, "Dead", characterSpriteSheet.Sprites_sheet, false)
 
 	return arrMovements, nil
 }
@@ -121,6 +150,7 @@ func run() {
 	cfg := pixelgl.WindowConfig{
 		Title:  "Cat game test",
 		Bounds: pixel.R(0, 0, 1024, 768),
+		VSync:  true,
 	}
 	win, err := pixelgl.NewWindow(cfg)
 	if err != nil {
@@ -130,11 +160,11 @@ func run() {
 	arrMov, err := initMovements()
 	anim := &Animation{
 		movement:     arrMov["Idle"],
-		rate:         1.0 / 10.0,
+		rate:         1.0 / 15.0,
 		counter:      0.0,
 		actual_frame: 0,
 	}
-	characterEntity := Entity{animation: anim, entity_name: "cat", entity_type: 1, pos_x: 200, pos_y: 300, physics: Physics{gravity: 1, speed: 1}}
+	characterEntity := Entity{animation: anim, entity_name: "cat", entity_type: 1, pos_x: 200, pos_y: 300, physics: Physics{gravity: -3000, speed: 1, jumpSpeed: 700}}
 
 	if err != nil {
 		panic(err)
@@ -149,18 +179,13 @@ func run() {
 		last = time.Now()
 		frameTime += dt
 
+		characterEntity.checkMovementStatus()
 		if win.JustPressed(pixelgl.KeySpace) {
-			characterEntity.UpdateMovement(arrMov["Jump"])
-		}
-
-		if win.Pressed(pixelgl.KeyRight) {
-			characterEntity.UpdateMovement(arrMov["Walk"])
-			characterEntity.UpdatePhysics(pixel.V(1, 0))
-		}
-
-		if win.JustReleased(pixelgl.KeyRight) {
-			characterEntity.UpdateMovement(arrMov["Idle"])
-			characterEntity.UpdatePhysics(pixel.V(0, 0))
+			characterEntity.UpdateMovement(arrMov["Jump"], pixel.V(150, characterEntity.physics.jumpSpeed))
+		} else if win.Pressed(pixelgl.KeyRight) {
+			characterEntity.UpdateMovement(arrMov["Walk"], pixel.V(150, 0))
+		} else {
+			characterEntity.UpdateMovement(arrMov["Idle"], pixel.V(0, 0))
 		}
 
 		canvas.Clear(colornames.Black)
