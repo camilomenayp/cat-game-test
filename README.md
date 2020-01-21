@@ -2,7 +2,7 @@
 This is just an experiment to practice Go deeper.
 It mainly uses the Pixel library ( https://github.com/faiface/pixel ).
 
-Work in progress!
+Work in progress! so some parts of the code might be really ugly.
 ## 2020-01-20
 Added a better loader of sprites (also using a CSV file). 
 Added some basic behaviour when pressing keys, an extremely simple physics struct, and movement.
