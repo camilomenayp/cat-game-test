@@ -13,6 +13,14 @@ import (
 	"golang.org/x/image/colornames"
 )
 
+type Physics struct {
+	gravity   float64
+	speed     float64
+	jumpSpeed float64
+	vel       pixel.Vec
+	ground    bool
+}
+
 type Movement struct {
 	action_name   string
 	type_name     string
@@ -26,8 +34,34 @@ type Animation struct {
 	rate         float64
 	counter      float64
 	sprite       *pixel.Sprite
-	rect         pixel.Rect
 	actual_frame int32
+}
+
+type Entity struct {
+	animation   *Animation
+	entity_type int32
+	entity_name string
+	physics     Physics
+	rect        pixel.Rect
+	pos_x       float64
+	pos_y       float64
+}
+
+func (ent *Entity) UpdateMovement(mov Movement) {
+	if mov.action_name != ent.animation.movement.action_name {
+		ent.animation.movement = mov
+		ent.animation.counter = 0
+		ent.animation.actual_frame = 0
+		ent.physics.vel.X = 0
+		ent.physics.vel.Y = 0
+	}
+}
+func (ent *Entity) UpdatePhysics(vector pixel.Vec) {
+
+	x, y := vector.XY()
+	ent.physics.vel.X = x
+	ent.physics.vel.Y = y
+
 }
 
 func (mov Movement) GetFrame(index int32) *pixel.Sprite {
@@ -38,20 +72,21 @@ func (mov Movement) GetFrame(index int32) *pixel.Sprite {
 	}
 	return nil
 }
-func (an *Animation) update(dt float64) {
-	an.counter += dt
-	if an.counter >= an.rate {
-		an.actual_frame++
-		an.sprite = an.movement.GetFrame(an.actual_frame % (an.movement.total_sprites - 1))
-		an.counter = 0
+func (ent *Entity) update(dt float64) {
+	ent.animation.counter += dt
+	if ent.animation.counter >= ent.animation.rate {
+		ent.animation.actual_frame++
+		ent.animation.sprite = ent.animation.movement.GetFrame(ent.animation.actual_frame % (ent.animation.movement.total_sprites - 1))
+		ent.animation.counter = 0
+		ent.pos_x = ent.pos_x + ent.physics.vel.X*ent.physics.speed
 	}
 }
 
-func (an *Animation) draw(t pixel.Target) {
-	if an.sprite == nil {
-		an.sprite = an.movement.GetFrame(0)
+func (ent *Entity) draw(t pixel.Target) {
+	if ent.animation.sprite == nil {
+		ent.animation.sprite = ent.animation.movement.GetFrame(0)
 	}
-	an.sprite.Draw(t, pixel.IM.Scaled(pixel.ZV, 0.2).Chained(pixel.IM.Moved(an.rect.Center())))
+	ent.animation.sprite.Draw(t, pixel.IM.Scaled(pixel.ZV, 0.2).Chained(pixel.IM.Moved(pixel.V(ent.pos_x, 300))))
 }
 
 var characterSpriteSheet sprite.SpriteSheet
@@ -94,12 +129,13 @@ func run() {
 
 	arrMov, err := initMovements()
 	anim := &Animation{
-		movement:     arrMov["Jump"],
+		movement:     arrMov["Idle"],
 		rate:         1.0 / 10.0,
 		counter:      0.0,
-		rect:         pixel.R(0, 0, 542, 474),
 		actual_frame: 0,
 	}
+	characterEntity := Entity{animation: anim, entity_name: "cat", entity_type: 1, pos_x: 200, pos_y: 300, physics: Physics{gravity: 1, speed: 1}}
+
 	if err != nil {
 		panic(err)
 	}
@@ -113,10 +149,24 @@ func run() {
 		last = time.Now()
 		frameTime += dt
 
+		if win.JustPressed(pixelgl.KeySpace) {
+			characterEntity.UpdateMovement(arrMov["Jump"])
+		}
+
+		if win.Pressed(pixelgl.KeyRight) {
+			characterEntity.UpdateMovement(arrMov["Walk"])
+			characterEntity.UpdatePhysics(pixel.V(1, 0))
+		}
+
+		if win.JustReleased(pixelgl.KeyRight) {
+			characterEntity.UpdateMovement(arrMov["Idle"])
+			characterEntity.UpdatePhysics(pixel.V(0, 0))
+		}
+
 		canvas.Clear(colornames.Black)
 		imd.Clear()
-		anim.update(dt)
-		anim.draw(imd)
+		characterEntity.update(dt)
+		characterEntity.draw(imd)
 		imd.Draw(canvas)
 
 		win.SetMatrix(pixel.IM.Scaled(pixel.ZV,
