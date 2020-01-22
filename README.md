@@ -13,10 +13,16 @@ Right now, the program is loading a spritesheet with one action ("Walk"), then i
 
 
 
-Resources
+### Resources
+
 All sprites are from: 
+
 https://www.gameart2d.com
+
 SDL C++ tutorial (good for theory):
+
 http://lazyfoo.net/tutorials/SDL/i
+
 Article about scrolling and cameras in 2d game:
+
 https://www.gamasutra.com/blogs/ItayKeren/20150511/243083/Scroll_Back_The_Theory_and_P%20ractice_of_Cameras_in_SideScrollers.php
