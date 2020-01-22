@@ -14,4 +14,4 @@ Right now, the program is loading a spritesheet with one action ("Walk"), then i
 
 
 All sprites are from: 
-https://www.gameart2d.com/free-platformer-game-tileset.html
+https://www.gameart2d.com
